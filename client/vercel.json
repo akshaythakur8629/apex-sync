@@ -1,0 +1,7 @@
+{
+  "name": "apex-sync-client",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install"
+}
