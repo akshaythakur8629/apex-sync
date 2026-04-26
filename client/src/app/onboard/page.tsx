@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
+import { authApi } from "@/lib/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,13 @@ const ROLE_LABELS: Record<StaffRole, string> = {
   head_athletic_trainer: "Head Athletic Trainer",
   rehab_rtp_lead: "Rehab / RTP Lead",
   sports_science_lead: "Sports Science Lead",
+};
+
+const ROLE_ID_MAP: Record<StaffRole, number> = {
+  director_of_performance: 1,
+  head_athletic_trainer: 2,
+  rehab_rtp_lead: 3,
+  sports_science_lead: 4,
 };
 
 const INITIAL_DATA_SOURCES: DataSource[] = [
@@ -205,12 +214,31 @@ function Step1({
   state,
   onChange,
   onNext,
+  checkingOrg,
+  orgError,
+  onCheckOrg,
 }: {
   state: OrgFormState;
   onChange: (patch: Partial<OrgFormState>) => void;
   onNext: () => void;
+  checkingOrg?: boolean;
+  orgError?: string;
+  onCheckOrg: (name: string) => void;
 }) {
-  const valid = state.orgName.trim() && state.orgType && state.sport;
+  const [lastChecked, setLastChecked] = useState("");
+  const valid = state.orgName.trim() && state.orgType && state.sport && !orgError;
+
+  // 2s debounce for org name check
+  useEffect(() => {
+    const name = state.orgName.trim();
+    if (!name || name === lastChecked) return;
+    
+    const timer = setTimeout(() => {
+      onCheckOrg(name);
+      setLastChecked(name);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [state.orgName, lastChecked, onCheckOrg]);
 
   return (
     <form
@@ -222,12 +250,25 @@ function Step1({
     >
       <div>
         <FieldLabel>Organisation name *</FieldLabel>
-        <Input
-          placeholder="e.g. Apex FC, Ridgeline Athletic"
-          value={state.orgName}
-          onChange={(v) => onChange({ orgName: v })}
-          required
-        />
+        <div className="relative">
+          <Input
+            placeholder="e.g. Apex FC, Ridgeline Athletic"
+            value={state.orgName}
+            onChange={(v) => onChange({ orgName: v })}
+            required
+          />
+          {checkingOrg && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <Spinner />
+            </div>
+          )}
+        </div>
+        {orgError && (
+          <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2 flex items-center gap-2 animate-shake">
+            <span className="text-red-500 text-sm">⚠️</span>
+            <p className="text-xs text-red-600 font-medium">{orgError}</p>
+          </div>
+        )}
       </div>
 
       <div>
@@ -278,10 +319,10 @@ function Step1({
 
       <button
         type="submit"
-        disabled={!valid}
+        disabled={!valid || checkingOrg}
         className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm transition"
       >
-        Continue →
+        {checkingOrg ? "Checking name..." : "Continue →"}
       </button>
     </form>
   );
@@ -677,11 +718,13 @@ function Step5({
   onLaunch,
   onBack,
   launching,
+  error,
 }: {
   state: OrgFormState;
   onLaunch: () => void;
   onBack: () => void;
   launching: boolean;
+  error?: string;
 }) {
   const orgTypeLabel = ORG_TYPES.find((o) => o.value === state.orgType)?.label ?? state.orgType;
   const sportLabel = SPORTS.find((s) => s.value === state.sport)?.label ?? state.sport;
@@ -748,6 +791,15 @@ function Step5({
         )}
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex items-start gap-2 animate-shake">
+          <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <p className="text-xs text-red-600 font-medium">{error}</p>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={onLaunch}
@@ -811,13 +863,29 @@ export default function OnboardPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<OrgFormState>(INITIAL_STATE);
-  const [launching, setLaunching] = useState(false);
+
+  const signupMutation = useMutation({
+    mutationFn: (payload: any) => authApi.signup(payload),
+    onSuccess: () => {
+      router.push("/dashboard");
+    },
+    onError: (err: any) => {
+      console.error('Signup failed:', err);
+    }
+  });
+
+  const checkOrgMutation = useMutation({
+    mutationFn: (name: string) => {
+      const slug = name.toLowerCase().replace(/\s+/g, '_');
+      return authApi.checkOrg(slug);
+    }
+  });
 
   function patch(update: Partial<OrgFormState>) {
     setForm((prev) => ({ ...prev, ...update }));
   }
 
-  function next() {
+  async function next() {
     setStep((s) => Math.min(s + 1, TOTAL_STEPS));
   }
 
@@ -825,9 +893,27 @@ export default function OnboardPage() {
     setStep((s) => Math.max(s - 1, 1));
   }
 
-  function launch() {
-    setLaunching(true);
-    setTimeout(() => router.push("/dashboard"), 2200);
+  async function launch() {
+    const payload = {
+      name: `${form.adminFirstName} ${form.adminLastName}`,
+      email: form.adminEmail,
+      password: form.adminPassword,
+      orgName: form.orgName,
+      orgType: form.orgType,
+      sport: form.sport,
+      region: form.region,
+      config: {
+        data_sources: form.dataSources.filter(s => s.enabled).map(s => s.id),
+        timezone: "UTC"
+      },
+      invitedStaff: form.staffInvites.map(s => ({
+        email: s.email,
+        name: s.email.split('@')[0],
+        roleId: ROLE_ID_MAP[s.role]
+      }))
+    };
+
+    signupMutation.mutate(payload);
   }
 
   const meta = STEP_META[step - 1];
@@ -894,11 +980,28 @@ export default function OnboardPage() {
             <p className="text-sm text-gray-500">{meta.desc}</p>
           </div>
 
-          {step === 1 && <Step1 state={form} onChange={patch} onNext={next} />}
+          {step === 1 && (
+            <Step1 
+              state={form} 
+              onChange={patch} 
+              onNext={next} 
+              checkingOrg={checkOrgMutation.isPending}
+              orgError={checkOrgMutation.data?.exists ? "Organisation name already taken." : undefined}
+              onCheckOrg={(name) => checkOrgMutation.mutate(name)}
+            />
+          )}
           {step === 2 && <Step2 state={form} onChange={patch} onNext={next} onBack={back} />}
           {step === 3 && <Step3 state={form} onChange={patch} onNext={next} onBack={back} />}
           {step === 4 && <Step4 state={form} onChange={patch} onNext={next} onBack={back} />}
-          {step === 5 && <Step5 state={form} onLaunch={launch} onBack={back} launching={launching} />}
+          {step === 5 && (
+            <Step5 
+              state={form} 
+              onLaunch={launch} 
+              onBack={back} 
+              launching={signupMutation.isPending} 
+              error={(signupMutation.error as any)?.message} 
+            />
+          )}
         </div>
       </div>
     </div>

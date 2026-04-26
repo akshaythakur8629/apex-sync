@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useMutation } from "@tanstack/react-query";
+import { authApi } from "@/lib/api";
 
 const ORGANISATIONS = [
   { id: "apex-corp", name: "Apex Corp", domain: "apexcorp.io" },
@@ -78,13 +80,15 @@ function LockedField({ label, value }: { label: string; value: string }) {
 function OrgDropdown({
   value,
   onChange,
+  organisations,
 }: {
   value: string;
   onChange: (v: string) => void;
+  organisations: { id: number; name: string; slug: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const selected = ORGANISATIONS.find((o) => o.id === value);
+  const selected = organisations.find((o) => o.slug === value);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -124,13 +128,13 @@ function OrgDropdown({
 
       {open && (
         <div className="absolute z-50 mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-slide-in-up">
-          {ORGANISATIONS.map((org) => (
+          {organisations.map((org) => (
             <button
-              key={org.id}
+              key={org.slug}
               type="button"
-              onClick={() => { onChange(org.id); setOpen(false); }}
+              onClick={() => { onChange(org.slug); setOpen(false); }}
               className={`w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-orange-50 transition ${
-                value === org.id ? "bg-orange-50" : ""
+                value === org.slug ? "bg-orange-50" : ""
               }`}
             >
               <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
@@ -138,9 +142,9 @@ function OrgDropdown({
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-800">{org.name}</div>
-                <div className="text-[11px] text-gray-400">{org.domain}</div>
+                <div className="text-[11px] text-gray-400">{org.slug}.apexsync.io</div>
               </div>
-              {value === org.id && (
+              {value === org.slug && (
                 <svg className="w-4 h-4 text-orange-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
@@ -162,35 +166,51 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [animKey, setAnimKey] = useState(0);
+  const [organisations, setOrganisations] = useState<{ id: number; name: string; slug: string }[]>([]);
 
-  const selectedOrg = ORGANISATIONS.find((o) => o.id === orgId);
+  const checkEmailMutation = useMutation({
+    mutationFn: (email: string) => authApi.checkEmail(email),
+    onSuccess: (data) => {
+      setOrganisations(data.organizations);
+      advance(2);
+    }
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: (payload: any) => authApi.login(payload),
+    onSuccess: () => {
+      router.push("/dashboard");
+    }
+  });
+
+  const selectedOrg = organisations.find((o) => o.slug === orgId);
 
   function advance(nextStep: Step) {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setStep(nextStep);
-      setAnimKey((k) => k + 1);
-    }, 1400);
+    setStep(nextStep);
+    setAnimKey((k) => k + 1);
   }
 
-  function handleStep1(e: React.FormEvent) {
+  async function handleStep1(e: React.FormEvent) {
     e.preventDefault();
-    if (!email) return;
-    advance(2);
+    if (!email || checkEmailMutation.isPending) return;
+    checkEmailMutation.mutate(email);
   }
 
-  function handleStep2(e: React.FormEvent) {
+  async function handleStep2(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId) return;
     advance(3);
   }
 
-  function handleStep3(e: React.FormEvent) {
+  async function handleStep3(e: React.FormEvent) {
     e.preventDefault();
-    if (!password) return;
-    setLoading(true);
-    setTimeout(() => router.push("/dashboard"), 1800);
+    if (!password || loginMutation.isPending) return;
+    
+    loginMutation.mutate({
+      email,
+      password,
+      org_slug: orgId
+    });
   }
 
   const stepMeta = [
@@ -319,21 +339,24 @@ export default function LoginPage() {
           {/* ── Step 1: Email ── */}
           {step === 1 && (
             <form key={`step-1-${animKey}`} className="space-y-4 animate-slide-in-up" onSubmit={handleStep1}>
-              <input
-                type="email"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
-                required
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition"
-              />
+              <div className="space-y-1">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoFocus
+                  required
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition"
+                />
+                {checkEmailMutation.error && <p className="text-[11px] text-red-500 ml-1">{(checkEmailMutation.error as any).message}</p>}
+              </div>
               <button
                 type="submit"
-                disabled={!email || loading}
+                disabled={!email || checkEmailMutation.isPending}
                 className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm transition shadow-sm"
               >
-                {loading ? <><Spinner /> Verifying…</> : "Continue"}
+                {checkEmailMutation.isPending ? <><Spinner /> Verifying…</> : "Continue"}
               </button>
             </form>
           )}
@@ -342,7 +365,7 @@ export default function LoginPage() {
           {step === 2 && (
             <form key={`step-2-${animKey}`} className="space-y-4 animate-slide-in-up" onSubmit={handleStep2}>
               <LockedField label="Email" value={email} />
-              <OrgDropdown value={orgId} onChange={setOrgId} />
+              <OrgDropdown value={orgId} onChange={setOrgId} organisations={organisations} />
               <button
                 type="submit"
                 disabled={!orgId || loading}
@@ -400,12 +423,14 @@ export default function LoginPage() {
                 </Link>
               </div>
 
+              {loginMutation.error && <p className="text-xs text-red-500 text-center">{(loginMutation.error as any).message}</p>}
+
               <button
                 type="submit"
-                disabled={!password || loading}
+                disabled={!password || loginMutation.isPending}
                 className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm transition shadow-sm"
               >
-                {loading ? <><Spinner /> Signing in…</> : "Login"}
+                {loginMutation.isPending ? <><Spinner /> Signing in…</> : "Login"}
               </button>
 
               <button

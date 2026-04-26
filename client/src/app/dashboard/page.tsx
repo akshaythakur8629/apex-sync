@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useAuth } from "../auth-provider";
 
 interface Athlete {
   id: string;
@@ -230,12 +231,13 @@ function AthleteCard({ athlete }: { athlete: Athlete }) {
 }
 
 export default function DashboardPage() {
+  const { user, logout } = useAuth();
   const conflicts = ATHLETES.filter((a) => a.hasConflict).length;
   const dataGaps = ATHLETES.filter((a) => a.dataGaps.length > 0).length;
   const cleared = ATHLETES.filter((a) => a.medicalStatus === "cleared").length;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex text-gray-900">
       {/* Sidebar */}
       <aside className="w-52 bg-white border-r border-gray-100 flex flex-col shrink-0">
         <div className="p-5 border-b border-gray-100">
@@ -269,13 +271,27 @@ export default function DashboardPage() {
             </Link>
           ))}
         </nav>
+
         <div className="p-3 border-t border-gray-100">
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-600">D</div>
-            <div>
-              <div className="text-xs font-medium text-gray-800">Dir. Performance</div>
-              <div className="text-[10px] text-gray-400">Apex Corp</div>
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-600">
+                {user?.name?.[0] || "U"}
+              </div>
+              <div>
+                <div className="text-xs font-medium text-gray-800">{user?.name || "User"}</div>
+                <div className="text-[10px] text-gray-400">Organisation Admin</div>
+              </div>
             </div>
+            <button
+              onClick={logout}
+              className="text-gray-400 hover:text-red-500 transition-colors p-1"
+              title="Logout"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+            </button>
           </div>
         </div>
       </aside>
