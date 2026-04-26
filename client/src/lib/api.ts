@@ -1,7 +1,6 @@
 const API_URL = '/api';
 
 export async function apiRequest(endpoint: string, options: RequestInit = {}) {
-  // 🟢 DEV INTERCEPTOR: Bypass auth check in local development
   if (process.env.NEXT_PUBLIC_SKIP_AUTH === 'true' && endpoint === '/auth/me') {
     return { 
       user: { 
