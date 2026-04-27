@@ -88,7 +88,7 @@ function OrgDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const selected = organisations.find((o) => o.slug === value);
+  const selected = organisations?.find((o) => o.slug === value);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -183,7 +183,7 @@ export default function LoginPage() {
     }
   });
 
-  const selectedOrg = organisations.find((o) => o.slug === orgId);
+  const selectedOrg = organisations?.find((o) => o.slug === orgId);
 
   function advance(nextStep: Step) {
     setStep(nextStep);
