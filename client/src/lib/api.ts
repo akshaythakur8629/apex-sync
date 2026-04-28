@@ -31,6 +31,34 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
   return data;
 }
 
+export const performanceApi = {
+  getRoster: () => apiRequest('/performance/roster'),
+  getAthleteDetail: (id: string) => apiRequest(`/performance/athlete/${id}`),
+};
+
+export const decisionsApi = {
+  getOpen: () => apiRequest('/decisions/open'),
+};
+
+export const umsApi = {
+  getUsers: () => apiRequest('/ums/org/users'),
+  createUser: (payload: {
+    name: string;
+    email: string;
+    password: string;
+    roleIds: number[];
+  }) => apiRequest('/ums/org/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (id: number, payload: {
+    name?: string;
+    password?: string;
+    isActive?: boolean;
+    roleIds?: number[];
+  }) => apiRequest(`/ums/org/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  getRoles: () => apiRequest('/ums/org/roles'),
+  createRole: (payload: { name: string; description?: string }) =>
+    apiRequest('/ums/org/roles', { method: 'POST', body: JSON.stringify(payload) }),
+};
+
 export const authApi = {
   signup: (payload: any) => apiRequest('/auth/signup', {
     method: 'POST',

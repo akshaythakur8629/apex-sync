@@ -15,7 +15,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-jakarta), system-ui, Arial, sans-serif;
 }
 
 @keyframes slideInUp {
@@ -41,4 +41,31 @@ body {
 
 .animate-shake {
   animation: shake 0.2s ease-in-out 0s 2;
+}
+
+/* Shared form input style used across modals and forms */
+.field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+  color: #1f2937;
+  background: #fff;
+  outline: none;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.field::placeholder {
+  color: #9ca3af;
+}
+
+.field:focus {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px #f97316;
+}
+
+.field:disabled {
+  background: #f9fafb;
+  cursor: not-allowed;
 }
