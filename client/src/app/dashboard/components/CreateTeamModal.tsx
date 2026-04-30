@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { performanceApi } from "@/lib/api";
+import { useToast } from "@/components/Toaster";
 
 interface CreateTeamModalProps {
   open: boolean;
@@ -13,6 +15,7 @@ export function CreateTeamModal({ open, onClose, onCreated }: CreateTeamModalPro
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const { success, error: toastError } = useToast();
 
   useEffect(() => {
     if (open) {
@@ -37,11 +40,16 @@ export function CreateTeamModal({ open, onClose, onCreated }: CreateTeamModalPro
     e.preventDefault();
     if (!name.trim()) return;
     setSubmitting(true);
-    // Simulated delay — replace with real API call when teams endpoint is ready
-    await new Promise((r) => setTimeout(r, 600));
-    onCreated({ name: name.trim(), description: description.trim() });
-    setSubmitting(false);
-    onClose();
+    try {
+      await performanceApi.createTeam({ name: name.trim(), description: description.trim() });
+      success("Team created successfully");
+      onCreated({ name: name.trim(), description: description.trim() });
+      onClose();
+    } catch (err: any) {
+      toastError(err.message || "Failed to create team");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (

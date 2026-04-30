@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { performanceApi, umsApi } from "@/lib/api";
+import { useToast } from "@/components/Toaster";
 import { AddAthleteDrawer } from "./AddAthleteDrawer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -130,6 +133,7 @@ interface AthletesSectionProps {
 }
 
 export function AthletesSection({ onAddAthlete }: AthletesSectionProps) {
+  const queryClient = useQueryClient();
   const [view, setView]             = useState<"staff" | "vp">("staff");
   const [search, setSearch]         = useState("");
   const [filterPos, setFilterPos]   = useState("all");
@@ -140,11 +144,19 @@ export function AthletesSection({ onAddAthlete }: AthletesSectionProps) {
   const [showDrawer, setShowDrawer] = useState(false);
   const PAGE_SIZE = 7;
 
+  const { data: apiAthletes = [], isLoading } = useQuery<Athlete[]>({
+    queryKey: ["athletes"],
+    queryFn: performanceApi.getRoster,
+    staleTime: 60_000,
+  });
+
+  const athletes = apiAthletes.length > 0 ? apiAthletes : DEMO_ATHLETES;
+
   function resetPage() { setPage(1); }
 
-  const filtered = DEMO_ATHLETES.filter((a) => {
+  const filtered = athletes.filter((a) => {
     const q = search.toLowerCase();
-    if (q && !(a.name.toLowerCase().includes(q) || a.position.toLowerCase().includes(q) || a.team.toLowerCase().includes(q))) return false;
+    if (q && !(a.name.toLowerCase().includes(q) || (a.position || "").toLowerCase().includes(q) || (a.team || "").toLowerCase().includes(q))) return false;
     if (filterPos    !== "all" && a.position !== filterPos)    return false;
     if (filterStatus !== "all" && a.status   !== filterStatus) return false;
     if (filterMedical !== "all" && a.medical !== filterMedical) return false;
@@ -157,13 +169,17 @@ export function AthletesSection({ onAddAthlete }: AthletesSectionProps) {
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const kpis = [
-    { label: "Total athletes", value: DEMO_ATHLETES.length, accent: "bg-gray-800", color: "text-white" },
-    { label: "Available",      value: DEMO_ATHLETES.filter((a) => a.status === "available").length,   accent: "bg-emerald-600", color: "text-white" },
-    { label: "Limited",        value: DEMO_ATHLETES.filter((a) => a.status === "limited").length,     accent: "bg-amber-500",   color: "text-white" },
-    { label: "Unavailable",    value: DEMO_ATHLETES.filter((a) => a.status === "unavailable").length, accent: "bg-red-500",     color: "text-white" },
-    { label: "Conflicts",      value: DEMO_ATHLETES.filter((a) => a.hasConflict).length,              accent: "bg-orange-500",  color: "text-white" },
-    { label: "Data gaps",      value: DEMO_ATHLETES.filter((a) => a.dataGaps.length > 0).length,      accent: "bg-indigo-600",  color: "text-white" },
+    { label: "Total athletes", value: athletes.length, accent: "bg-gray-800", color: "text-white" },
+    { label: "Available",      value: athletes.filter((a) => a.status === "available").length,   accent: "bg-emerald-600", color: "text-white" },
+    { label: "Limited",        value: athletes.filter((a) => a.status === "limited").length,     accent: "bg-amber-500",   color: "text-white" },
+    { label: "Unavailable",    value: athletes.filter((a) => a.status === "unavailable").length, accent: "bg-red-500",     color: "text-white" },
+    { label: "Conflicts",      value: athletes.filter((a) => a.hasConflict).length,              accent: "bg-orange-500",  color: "text-white" },
+    { label: "Data gaps",      value: athletes.filter((a: any) => (a.dataGaps || []).length > 0).length,      accent: "bg-indigo-600",  color: "text-white" },
   ];
+
+  function handleSaved() {
+    queryClient.invalidateQueries({ queryKey: ["athletes"] });
+  }
 
   const selCls = "pl-3.5 pr-8 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400/50 appearance-none cursor-pointer text-gray-700 relative";
 
@@ -494,7 +510,7 @@ export function AthletesSection({ onAddAthlete }: AthletesSectionProps) {
       <AddAthleteDrawer
         open={showDrawer}
         onClose={() => setShowDrawer(false)}
-        onSaved={() => {}}
+        onSaved={handleSaved}
       />
     </div>
   );

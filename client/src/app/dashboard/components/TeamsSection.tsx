@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { umsApi } from "@/lib/api";
+import { useToast } from "@/components/Toaster";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -164,9 +165,18 @@ function UserModal({ open, onClose, onSaved, roles, onCreateRole, editing }: Use
     try {
       const roleIds = [Number(selectedRole)];
       if (isEdit && editing) {
-        await umsApi.updateUser(editing.id, { name: name.trim(), roleIds });
+        await umsApi.updateUser(editing.id, { 
+          name: name.trim(), 
+          roleIds 
+        });
       } else {
-        await umsApi.createUser({ name: name.trim(), email: email.trim(), password: "", roleIds });
+        await umsApi.createUser({ 
+          name: name.trim(), 
+          email: email.trim(), 
+          username: username.trim() || undefined,
+          phone: phone.trim() || undefined,
+          roleIds 
+        });
       }
       onSaved();
       onClose();
@@ -421,6 +431,20 @@ export function TeamsSection() {
     staleTime: 2 * 60_000,
   });
 
+  const toast = useToast();
+
+  const inviteMutation = useMutation({
+    mutationFn: umsApi.createUser,
+    onSuccess: () => {
+      toast.success("Team member invited successfully");
+      queryClient.invalidateQueries({ queryKey: ["org-users"] });
+      setShowAdd(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to invite member");
+    }
+  });
+
   const { data: roles = [], isLoading: rolesLoading } = useQuery<OrgRole[]>({
     queryKey: ["org-roles"],
     queryFn: umsApi.getRoles,
@@ -429,11 +453,18 @@ export function TeamsSection() {
 
   const createRoleMutation = useMutation({
     mutationFn: (name: string) => umsApi.createRole({ name }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["org-roles"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["org-roles"] });
+      toast.success("Role created");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create role");
+    }
   });
 
   function handleSaved() {
     queryClient.invalidateQueries({ queryKey: ["org-users"] });
+    toast.success("Member details updated");
   }
 
   async function handleCreateRole(name: string): Promise<OrgRole> {

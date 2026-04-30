@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { performanceApi, decisionsApi } from "@/lib/api";
 import { CreateTeamModal } from "./CreateTeamModal";
 
@@ -117,7 +117,7 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Overview() {
-  const [teams, setTeams] = useState<Team[]>(DEMO_TEAMS);
+  const queryClient = useQueryClient();
   const [showCreateTeam, setShowCreateTeam] = useState(false);
 
   const { data: roster = [], isLoading: rosterLoading } = useQuery<RosterAthlete[]>({
@@ -126,13 +126,28 @@ export function Overview() {
     staleTime: 60_000,
   });
 
+  const { data: apiTeams = [], isLoading: teamsLoading } = useQuery<any[]>({
+    queryKey: ["org-teams"],
+    queryFn: performanceApi.getTeams,
+    staleTime: 60_000,
+  });
+
+  const teams = apiTeams.length > 0 ? apiTeams.map((t: any) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description || "Active programme",
+    athleteCount: t._count?.athletes || 0,
+    lastActivity: "Active",
+    status: "active" as const
+  })) : DEMO_TEAMS;
+
   const { data: openDecisions = [], isLoading: decisionsLoading } = useQuery<Decision[]>({
     queryKey: ["decisions-open"],
     queryFn: decisionsApi.getOpen,
     staleTime: 60_000,
   });
 
-  const isLoading = rosterLoading || decisionsLoading;
+  const isLoading = rosterLoading || decisionsLoading || teamsLoading;
 
   const kpis = {
     totalTeams: teams.length,
@@ -141,7 +156,7 @@ export function Overview() {
     dataCompleteness:
       roster.length === 0
         ? 100
-        : Math.round((roster.filter((a) => a.dataGaps.length === 0).length / roster.length) * 100),
+        : Math.round((roster.filter((a) => (a.dataGaps || []).length === 0).length / roster.length) * 100),
   };
 
   const alerts = [
@@ -168,16 +183,17 @@ export function Overview() {
       })),
   ];
 
-  function handleTeamCreated(team: { name: string; description: string }) {
-    const newTeam: Team = {
-      id: `t${Date.now()}`,
-      name: team.name,
-      description: team.description || "New team",
-      athleteCount: 0,
-      lastActivity: "Just now",
-      status: "active",
-    };
-    setTeams((prev) => [...prev, newTeam]);
+  const createTeamMutation = useMutation({
+    mutationFn: performanceApi.createTeam,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["org-teams"] }),
+  });
+
+  async function handleTeamCreated(team: { name: string; description: string }) {
+    try {
+      await createTeamMutation.mutateAsync(team);
+    } catch (err) {
+      console.error("Failed to create team:", err);
+    }
   }
 
   return (

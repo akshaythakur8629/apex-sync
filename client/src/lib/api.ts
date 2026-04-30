@@ -34,6 +34,9 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
 export const performanceApi = {
   getRoster: () => apiRequest('/performance/roster'),
   getAthleteDetail: (id: string) => apiRequest(`/performance/athlete/${id}`),
+  createAthlete: (payload: any) => apiRequest('/performance/roster', { method: 'POST', body: JSON.stringify(payload) }),
+  getTeams: () => apiRequest('/performance/teams'),
+  createTeam: (payload: { name: string; description?: string }) => apiRequest('/performance/teams', { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 export const decisionsApi = {
@@ -45,7 +48,9 @@ export const umsApi = {
   createUser: (payload: {
     name: string;
     email: string;
-    password: string;
+    username?: string;
+    phone?: string;
+    password?: string;
     roleIds: number[];
   }) => apiRequest('/ums/org/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id: number, payload: {
@@ -54,9 +59,10 @@ export const umsApi = {
     isActive?: boolean;
     roleIds?: number[];
   }) => apiRequest(`/ums/org/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  getRoles: () => apiRequest('/ums/org/roles'),
-  createRole: (payload: { name: string; description?: string }) =>
-    apiRequest('/ums/org/roles', { method: 'POST', body: JSON.stringify(payload) }),
+  getRoles: () => apiRequest('/ums/roles'),
+  getPermissions: () => apiRequest('/ums/roles/permissions'),
+  createRole: (payload: { name: string; description?: string, permissionIds?: number[] }) =>
+    apiRequest('/ums/roles', { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 export const authApi = {

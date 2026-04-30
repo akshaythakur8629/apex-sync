@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { umsApi } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { performanceApi, umsApi } from "@/lib/api";
+import { useToast } from "@/components/Toaster";
 
 interface TeamMember {
   id: number;
@@ -59,8 +60,9 @@ export function AddAthleteDrawer({ open, onClose, onSaved }: AddAthleteDrawerPro
   const [files, setFiles]               = useState<File[]>([]);
   const [dragging, setDragging]         = useState(false);
   const [staffAssignment, setStaffAssignment] = useState<Record<string, number | "">>({});
+  const { success, error: toastError } = useToast();
   const [submitting, setSubmitting]     = useState(false);
-  const [error, setError]               = useState("");
+  const [error, setError]               = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,6 +70,12 @@ export function AddAthleteDrawer({ open, onClose, onSaved }: AddAthleteDrawerPro
     queryKey: ["org-users"],
     queryFn: umsApi.getUsers,
     staleTime: 2 * 60_000,
+  });
+
+  const { data: teams = [] } = useQuery<any[]>({
+    queryKey: ["org-teams"],
+    queryFn: () => performanceApi.getTeams(),
+    staleTime: 5 * 60_000,
   });
 
   useEffect(() => {
@@ -83,7 +91,7 @@ export function AddAthleteDrawer({ open, onClose, onSaved }: AddAthleteDrawerPro
   }, [open, onClose]);
 
   function usersForRole(role: string) {
-    return members.filter((m) => m.roles.includes(role));
+    return members.filter((m) => (m.roles || []).includes(role));
   }
 
   function addFiles(incoming: FileList | null) {
@@ -107,11 +115,26 @@ export function AddAthleteDrawer({ open, onClose, onSaved }: AddAthleteDrawerPro
     const pos = positionSelect === "Custom" ? customPosition.trim() : positionSelect;
     if (!pos) return setError("Position is required.");
     if (!team) return setError("Please assign a team.");
+    
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 700));
-    setSubmitting(false);
-    onSaved();
-    onClose();
+    try {
+      await performanceApi.createAthlete({
+        name: name.trim(),
+        teamId: Number(team),
+        position: pos,
+        dateOfBirth: dob || undefined,
+        status: "available",
+        medicalClearance: medical || "cleared",
+        medicalNotes: medicalNotes.trim() || undefined
+      });
+      success("Athlete added successfully");
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toastError(err.message || "Failed to add athlete.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const fi  = "w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all";
@@ -288,7 +311,7 @@ export function AddAthleteDrawer({ open, onClose, onSaved }: AddAthleteDrawerPro
                 <div className="relative">
                   <select value={team} onChange={(e) => setTeam(e.target.value)} className={sel}>
                     <option value="">Assign to team…</option>
-                    {TEAMS.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                   <ChevronDown />
                 </div>
